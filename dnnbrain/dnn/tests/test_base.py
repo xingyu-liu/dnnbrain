@@ -1,14 +1,17 @@
 import os
 import cv2
+import copy
 import torch
 import pytest
 import numpy as np
 
 from PIL import Image
 from os.path import join as pjoin
+from sklearn.svm import SVC, SVR
+from sklearn.model_selection import cross_val_score
 from torchvision import transforms
-from dnnbrain.dnn.base import ImageSet, VideoSet, ImageProcessor
-
+from dnnbrain.dnn import base as db_base
+import matplotlib.pyplot as plt
 
 DNNBRAIN_TEST = pjoin(os.environ['DNNBRAIN_DATA'], 'test')
 TMP_DIR = pjoin(os.path.expanduser('~'), '.dnnbrain_tmp')
@@ -24,7 +27,7 @@ class TestImageSet:
         img_dir = pjoin(DNNBRAIN_TEST, 'image', 'images')
         img_ids = ['n01443537_2819.JPEG', 'n01531178_2651.JPEG']
 
-        dataset = ImageSet(img_dir, img_ids)
+        dataset = db_base.ImageSet(img_dir, img_ids)
 
         # test dir ids labels
         assert dataset.img_dir == img_dir
@@ -43,7 +46,7 @@ class TestImageSet:
         transform = transforms.Compose([transforms.Resize((224, 224)),
                                         transforms.ToTensor()])
     
-        dataset = ImageSet(img_dir, img_ids, labels, transform)
+        dataset = db_base.ImageSet(img_dir, img_ids, labels, transform)
         
         assert np.all(dataset.labels == np.array([1, 11]))
         
@@ -63,7 +66,7 @@ class TestImageSet:
         transform = transforms.Compose([transforms.Resize((224, 224)),
                                         transforms.ToTensor()])
         
-        dataset = ImageSet(img_dir, img_ids, labels, transform)
+        dataset = db_base.ImageSet(img_dir, img_ids, labels, transform)
         
         # test indice int
         indices = 3
@@ -100,7 +103,7 @@ class TestImageSet:
             image_new = torch.cat((image_new, img_tmp))
 
         assert torch.equal(image_org, image_new)
-        assert labels_get, labels[indices]
+        np.testing.assert_equal(labels_get, labels[indices])
 
 
 class TestVideoSet:
@@ -108,7 +111,7 @@ class TestVideoSet:
     def test_init(self):
         vid_file = pjoin(DNNBRAIN_TEST, 'video', 'sub-CSI1_ses-01_imagenet.mp4')
         frame_nums = list(np.random.randint(0, 148, 20))
-        dataset = VideoSet(vid_file, frame_nums)
+        dataset = db_base.VideoSet(vid_file, frame_nums)
         assert dataset.frame_nums == frame_nums
 
     # test video in each frames
@@ -118,7 +121,7 @@ class TestVideoSet:
         vid_file = pjoin(DNNBRAIN_TEST, 'video', 'sub-CSI1_ses-01_imagenet.mp4')
         transform = transforms.Compose([transforms.ToTensor()])
         frame_list = [4, 6, 2, 8, 54, 23, 127]
-        dataset = VideoSet(vid_file, frame_list)
+        dataset = db_base.VideoSet(vid_file, frame_list)
         indices = slice(0, 5)
         tmpvi, _ = dataset[indices]
         for ii, i in enumerate(frame_list[indices]):
@@ -132,7 +135,7 @@ class TestVideoSet:
         # test int
         vid_file = pjoin(DNNBRAIN_TEST, 'video', 'sub-CSI1_ses-01_imagenet.mp4')
         frame_nums = list(np.random.randint(0, 148, 20))
-        dataset = VideoSet(vid_file, frame_nums)
+        dataset = db_base.VideoSet(vid_file, frame_nums)
         transform = transforms.Compose([transforms.ToTensor()])
         for i in range(len(frame_nums)):
             tmp_video, _ = dataset[i]
@@ -147,7 +150,7 @@ class TestVideoSet:
         vid_file = pjoin(DNNBRAIN_TEST, 'video', 'sub-CSI1_ses-01_imagenet.mp4')
         transform = transforms.Compose([transforms.ToTensor()])
         frame_list = [2, 8, 54, 127, 128, 129, 130]
-        dataset = VideoSet(vid_file, frame_list)
+        dataset = db_base.VideoSet(vid_file, frame_list)
         indices = [1, 2, 4, 5]
         tmpvi, _ = dataset[indices]
         for ii, i in enumerate([frame_list[i] for i in indices]):
@@ -162,7 +165,7 @@ class TestVideoSet:
 class TestImageProcessor:
 
     image = np.random.randint(0, 256, (3, 5, 5), np.uint8)
-    ip = ImageProcessor()
+    ip = db_base.ImageProcessor()
 
     def test_to_array(self):
 
@@ -365,6 +368,31 @@ class TestImageProcessor:
         assert isinstance(pil1, Image.Image)
         np.testing.assert_equal(pil1, pil2)
 
+    def test_translate(self):
+
+        #prepare image
+        img = np.random.normal(size=(3,50,50))
+        bkg = np.zeros((3,224,224))
+        
+        #prepare parameters
+        startpoint = (20,20)
+        endpoint = (20,50)
+        stride = 2
+        
+        img_tran = self.ip.translate(img, bkg, startpoint, endpoint, stride)
+        
+        # assert shape
+        num = int((endpoint[1]-startpoint[1])/stride)+1
+        assert img_tran.shape[0] == num
+        assert (img_tran.shape[2],img_tran.shape[3]) == (bkg.shape[1], bkg.shape[2])
+        
+        # assert pixel
+        pic = img_tran[15]
+        plt.imshow(pic.transpose(1,2,0))
+        print(pic[:,50,20])
+        pixel = pic[0,30,40]
+        assert pixel == 0
+    
     def test_norm(self):
 
         # assert L1
@@ -379,6 +407,110 @@ class TestImageProcessor:
 
         img = np.array([[1, 2], [3, 4]])
         assert self.ip.total_variation(img) == 6
+
+
+def test_cross_val_confusion():
+    X = np.random.randn(30, 5)
+    y = np.random.randint(0, 2, 30)
+    svc = SVC()
+    cv = 3
+
+    accs_true = cross_val_score(svc, X, y, cv=cv, scoring='accuracy')
+    conf_ms, accs_test = db_base.cross_val_confusion(svc, X, y, cv)
+    np.testing.assert_equal(accs_test, accs_true)
+
+
+class TestUnivariateMapping:
+
+    def test_map(self):
+        uv = db_base.UnivariateMapping()
+        cv = 3
+        n_trg = 1
+        n_label = 2
+        X = np.random.randn(30, 5)
+        y_c = np.random.randint(0, n_label, (30, n_trg))
+        y_r = np.random.randn(30, n_trg)
+        keys = ['score', 'location', 'model', 'conf_m']
+
+        # test corr
+        uv.set_estimator('corr')
+        uv.set_cv(3)
+        map_dict_corr = uv.map(X, y_r)
+        assert sorted(keys[:2]) == sorted(map_dict_corr.keys())
+        for v in map_dict_corr.values():
+            assert v.shape == (n_trg,)
+
+        # test regressor
+        uv.set_estimator('glm')
+        uv.set_cv(cv)
+        uv.set_scoring('correlation')
+        map_dict_r = uv.map(X, y_r)
+        assert sorted(keys[:3]) == sorted(map_dict_r.keys())
+        for k, v in map_dict_r.items():
+            if k == 'score':
+                assert v.shape == (n_trg, cv)
+            else:
+                assert v.shape == (n_trg,)
+
+        # test classifier
+        uv.set_estimator('lrc')
+        uv.set_cv(cv)
+        map_dict_c = uv.map(X, y_c)
+        assert sorted(keys) == sorted(map_dict_c.keys())
+        for k, v in map_dict_c.items():
+            if k == 'score':
+                assert v.shape == (n_trg, cv)
+            elif k == 'conf_m':
+                assert v.shape == (n_trg, cv)
+                assert v[0][0].shape == (n_label, n_label)
+            else:
+                assert v.shape == (n_trg,)
+
+
+class TestMultivariateMapping:
+
+    def test_map(self):
+        mv = db_base.MultivariateMapping()
+        cv = 3
+        n_trg = 2
+        n_label = 2
+        X = np.random.randn(30, 5)
+        Y_c = np.random.randint(0, n_label, (30, n_trg))
+        Y_r = np.random.randn(30, n_trg)
+
+        # test classifier
+        mv.set_estimator('svc')
+        mv.set_cv(cv)
+        map_dict_c = mv.map(X, Y_c)
+        for trg_idx in range(n_trg):
+            conf_ms_true, accs_true = db_base.cross_val_confusion(mv.estimator, X, Y_c[:, trg_idx], cv)
+            np.testing.assert_equal(map_dict_c['score'][trg_idx], accs_true)
+            for cv_idx in range(cv):
+                np.testing.assert_equal(map_dict_c['conf_m'][trg_idx, cv_idx], conf_ms_true[cv_idx])
+            coef_test = copy.deepcopy(mv.estimator).fit(X, Y_c[:, trg_idx]).coef_
+            np.testing.assert_equal(map_dict_c['model'][trg_idx].coef_, coef_test)
+
+        # test regressor (multi-target flag is True)
+        mv.set_estimator('glm')
+        mv.set_cv(cv)
+        mv.set_scoring('explained_variance')
+        map_dict_r1 = mv.map(X, Y_r)
+        for trg_idx in range(n_trg):
+            scores_true = cross_val_score(mv.estimator, X, Y_r[:, trg_idx], scoring='explained_variance', cv=cv)
+            np.testing.assert_almost_equal(map_dict_r1['score'][trg_idx], scores_true, 10)
+            coef_test = copy.deepcopy(mv.estimator).fit(X, Y_r[:, trg_idx]).coef_
+            np.testing.assert_almost_equal(map_dict_r1['model'][0].coef_[trg_idx], coef_test, 10)
+
+        # test regressor (multi-target flag is False)
+        mv.set_estimator(SVR(kernel='linear'))
+        mv.set_cv(cv)
+        mv.set_scoring('r2')
+        map_dict_r2 = mv.map(X, Y_r)
+        for trg_idx in range(n_trg):
+            scores_true = cross_val_score(mv.estimator, X, Y_r[:, trg_idx], scoring='r2', cv=cv)
+            np.testing.assert_almost_equal(map_dict_r2['score'][trg_idx], scores_true, 10)
+            coef_test = copy.deepcopy(mv.estimator).fit(X, Y_r[:, trg_idx]).coef_
+            np.testing.assert_equal(map_dict_r2['model'][trg_idx].coef_, coef_test)
 
 
 if __name__ == '__main__':

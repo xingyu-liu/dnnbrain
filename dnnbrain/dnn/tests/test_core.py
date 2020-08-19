@@ -426,39 +426,204 @@ class TestMask:
             assert dmask.get(layer) == dmask_dict[layer]
 
 
+class TestRDM:
+
+    def test_load(self):
+        n_elem = 6
+
+        # test bRDM
+        rdm_type = 'bRDM'
+        rdm_dict = {
+            '1': np.random.randn(n_elem),
+            '3': np.random.randn(n_elem)
+        }
+        rdm_file = pjoin(TMP_DIR, 'test.rdm.h5')
+        wf = h5py.File(rdm_file, 'w')
+        wf.attrs['type'] = rdm_type
+        for k, v in rdm_dict.items():
+            wf.create_dataset(k, data=v)
+        wf.close()
+
+        rdm = dcore.RDM()
+        rdm.load(rdm_file)
+        assert rdm.rdm_type == rdm_type
+        assert sorted(rdm._rdm_dict.keys()) == sorted(rdm_dict.keys())
+        for k, v in rdm_dict.items():
+            np.testing.assert_equal(v, rdm._rdm_dict[k])
+
+    def test_save(self):
+
+        n_iter = 2
+        n_elem = 6
+
+        # test dRDM
+        rdm_type = 'dRDM'
+        rdm_dict = {
+            'conv5': np.random.randn(n_iter, n_elem),
+            'fc3': np.random.randn(n_iter, n_elem)
+        }
+        rdm_file = pjoin(TMP_DIR, 'test.rdm.h5')
+        rdm = dcore.RDM()
+        rdm.rdm_type = rdm_type
+        rdm._rdm_dict = rdm_dict
+        rdm.save(rdm_file)
+
+        rf = h5py.File(rdm_file, 'r')
+        assert rf.attrs['type'] == rdm_type
+        assert sorted(rf.keys()) == sorted(rdm_dict.keys())
+        for k, v in rdm_dict.items():
+            np.testing.assert_equal(v, rf[k][:])
+        rf.close()
+
+    def test_get(self):
+        # test bRDM
+        rdm_dict = {
+            '1': np.array([[0, 1, 2], [0, 0, 3], [0, 0, 0]]),
+            '3': np.array([[0, 4, 5], [0, 0, 6], [0, 0, 0]])
+        }
+        rdm_dict_triu = dict()
+        for k, v in rdm_dict.items():
+            rdm_dict_triu[k] = v[np.tri(v.shape[0], k=-1, dtype=np.bool).T]
+
+        rdm = dcore.RDM()
+        rdm.rdm_type = 'bRDM'
+        rdm._rdm_dict = rdm_dict_triu
+        for k, v in rdm_dict.items():
+            np.testing.assert_equal(v, rdm.get(k, False))
+            np.testing.assert_equal(rdm_dict_triu[k], rdm.get(k, True))
+
+        # test dRDM
+        rdm_dict = {
+            'conv5': np.array([[[0, 1, 2], [0, 0, 3], [0, 0, 0]]]),
+            'fc3': np.array([[[0, 4, 5], [0, 0, 6], [0, 0, 0]]])
+        }
+        rdm_dict_triu = dict()
+        for k, v in rdm_dict.items():
+            rdm_dict_triu[k] = v[:, np.tri(v.shape[1], k=-1, dtype=np.bool).T]
+
+        rdm = dcore.RDM()
+        rdm.rdm_type = 'dRDM'
+        rdm._rdm_dict = rdm_dict_triu
+        for k, v in rdm_dict.items():
+            np.testing.assert_equal(v, rdm.get(k, False))
+            np.testing.assert_equal(rdm_dict_triu[k], rdm.get(k, True))
+
+    def test_set(self):
+        # ---test bRDM---
+        rdm_dict = {
+            '1': np.array([[0, 1, 2], [0, 0, 3], [0, 0, 0]]),
+            '3': np.array([[0, 4, 5], [0, 0, 6], [0, 0, 0]])
+        }
+        rdm_dict_triu = dict()
+        for k, v in rdm_dict.items():
+            rdm_dict_triu[k] = v[np.tri(v.shape[0], k=-1, dtype=np.bool).T]
+
+        rdm = dcore.RDM()
+        rdm.rdm_type = 'bRDM'
+
+        # test non-triu
+        for k, v in rdm_dict.items():
+            rdm.set(k, v, False)
+        assert rdm_dict.keys() == rdm._rdm_dict.keys()
+        for k, v in rdm_dict_triu.items():
+            np.testing.assert_equal(v, rdm._rdm_dict[k])
+
+        # test triu
+        for k, v in rdm_dict_triu.items():
+            rdm.set(k, v, True)
+        assert rdm_dict_triu.keys() == rdm._rdm_dict.keys()
+        for k, v in rdm_dict_triu.items():
+            np.testing.assert_equal(v, rdm._rdm_dict[k])
+
+        # test dRDM
+        rdm_dict = {
+            'conv5': np.array([[[0, 1, 2], [0, 0, 3], [0, 0, 0]]]),
+            'fc3': np.array([[[0, 4, 5], [0, 0, 6], [0, 0, 0]]])
+        }
+        rdm_dict_triu = dict()
+        for k, v in rdm_dict.items():
+            rdm_dict_triu[k] = v[:, np.tri(v.shape[1], k=-1, dtype=np.bool).T]
+
+        rdm = dcore.RDM()
+        rdm.rdm_type = 'dRDM'
+
+        # test non-triu
+        for k, v in rdm_dict.items():
+            rdm.set(k, v, False)
+        assert rdm_dict.keys() == rdm._rdm_dict.keys()
+        for k, v in rdm_dict_triu.items():
+            np.testing.assert_equal(v, rdm._rdm_dict[k])
+
+        # test triu
+        for k, v in rdm_dict_triu.items():
+            rdm.set(k, v, True)
+        assert rdm_dict_triu.keys() == rdm._rdm_dict.keys()
+        for k, v in rdm_dict_triu.items():
+            np.testing.assert_equal(v, rdm._rdm_dict[k])
+
+    def test_keys(self):
+        n_elem = 3
+        rdm_dict = {
+            '1': np.random.randn(n_elem),
+            '3': np.random.randn(n_elem)
+        }
+        rdm = dcore.RDM()
+        rdm._rdm_dict = rdm_dict
+        assert list(rdm_dict.keys()) == rdm.keys
+
+    def test_n_item(self):
+        rdm_type = 'dRDM'
+        rdm_dict = {
+            'conv1': np.random.randn(2, 1)
+        }
+        rdm = dcore.RDM()
+        rdm.rdm_type = rdm_type
+        rdm._rdm_dict = rdm_dict
+        assert rdm.n_item == 2
+
+
 class TestDnnProbe:
 
     # Prepare DNN activation
+    n_sample = 30
     dnn_activ = dcore.Activation()
-    dnn_activ.set('conv5', np.random.randn(10, 2, 3, 3))
-    dnn_activ.set('fc3', np.random.randn(10, 10, 1, 1))
+    dnn_activ.set('conv5', np.random.randn(n_sample, 1, 3, 3))
+    dnn_activ.set('fc3', np.random.randn(n_sample, 10, 1, 1))
 
     def test_probe(self):
 
-        # prepare behavior data
-        beh_data = np.random.randint(1, 3, (10, 1))
+        # prepare data
+        cv = 2
+        n_beh = 2
+        beh_c = np.random.randint(1, 3, (self.n_sample, n_beh))
+        beh_r = np.random.randn(self.n_sample, n_beh)
+        probe = dcore.DnnProbe(self.dnn_activ, 'uv', 'corr')
 
-        # test uv and iter_axis=None
-        probe = dcore.DnnProbe(self.dnn_activ, 'uv', 'lrc')
-        pred_dict = probe.probe(beh_data)
-        assert list(pred_dict.keys()) == self.dnn_activ.layers
-        v1_keys = sorted(['score', 'model', 'chn_loc', 'row_loc', 'col_loc'])
-        for k1, v1 in pred_dict.items():
+        # test uv/corr and iter_axis=None
+        probe_dict1 = probe.probe(beh_r)
+        assert list(probe_dict1.keys()) == self.dnn_activ.layers
+        v1_keys = sorted(['score', 'location'])
+        for k1, v1 in probe_dict1.items():
             assert sorted(v1.keys()) == v1_keys
-            assert np.all(v1['chn_loc'] == 1)
-            for v2 in v1.values():
-                assert v2.shape == (1, beh_data.shape[1])
+            assert v1['score'].shape == (1, n_beh)
+            assert v1['location'].shape == (1, n_beh, 3)
+            if k1 == 'conv5':
+                assert np.all(v1['location'][..., 0] == 1)
+            elif k1 == 'fc3':
+                assert np.all(v1['location'][..., 1] == 1)
+                assert np.all(v1['location'][..., 2] == 1)
 
-        # test mv and iter_axis=channel
-        probe.set(model_type='mv', model_name='lrc')
-        pred_dict = probe.probe(beh_data, 'channel')
-        assert list(pred_dict.keys()) == self.dnn_activ.layers
-        v1_keys = sorted(['score', 'model'])
-        for k1, v1 in pred_dict.items():
+        # test mv/lrc and iter_axis=channel
+        probe.set_mapper('mv', 'lrc', cv, None)
+        probe_dict2 = probe.probe(beh_c, 'channel')
+        assert list(probe_dict2.keys()) == self.dnn_activ.layers
+        v1_keys = sorted(['score', 'model', 'conf_m'])
+        for k1, v1 in probe_dict2.items():
             assert sorted(v1.keys()) == v1_keys
             n_chn = self.dnn_activ.get(k1).shape[1]
-            for v2 in v1.values():
-                assert v2.shape == (n_chn, beh_data.shape[1])
+            assert v1['score'].shape == (n_chn, n_beh, cv)
+            assert v1['model'].shape == (n_chn, n_beh)
+            assert v1['conf_m'].shape == (n_chn, n_beh, cv)
 
 
 if __name__ == '__main__':

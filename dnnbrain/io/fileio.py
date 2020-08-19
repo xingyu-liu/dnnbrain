@@ -5,13 +5,16 @@ from collections import OrderedDict
 
 
 class StimulusFile:
-    """A class to read and write stimulus file """
-
+    """
+    A class to read and write stimulus file 
+    """
     def __init__(self, fname):
         """
-        Parameter:
-        ---------
-        fname[str]: pre-designed .stim.csv file.
+        Parameters
+        ----------
+        fname : str
+            pre-designed .stim.csv file.
+            
         Format of .stim.csv of image stimuli is
         --------------------------
         type=image
@@ -39,9 +42,10 @@ class StimulusFile:
         
     def read(self):
         """
-        Return:
+        Returns
         -------
-        stimuli[OrderedDict]: Dictionary of the stimuli information
+        stimuli : OrderedDict
+            Dictionary of the stimuli information
         """
         # -load csv data-
         with open(self.fname) as rf:
@@ -76,28 +80,38 @@ class StimulusFile:
         data = OrderedDict()
         for idx, key in enumerate(data_keys):
             if key == 'stimID':
-                dtype = np.str if stimuli['type'] == 'image' else np.int
+                if stimuli['type'] == 'image':
+                    dtype = np.str
+                else:
+                    var_data[idx] = np.float64(var_data[idx])
+                    dtype = np.int
             elif key == 'label':
+                var_data[idx] = np.float64(var_data[idx])
                 dtype = np.int
             elif key == 'condition':
                 dtype = np.str
             else:
                 dtype = np.float
-            data[key] = np.array(var_data[idx], dtype=dtype)
+            data[key] = np.asarray(var_data[idx], dtype=dtype)
         stimuli['data'] = data
 
         return stimuli
     
     def write(self, type, path, data, **opt_meta):
         """
-        Parameters:
+        Parameters
         ----------
-        type[str]: stimulus type in ('image', 'video')
-        path[str]: path_to_stimuli
+        type : str
+            Stimulus type in ('image', 'video')
+        path : str
+            Path_to_stimuli.
+            
             If type is 'image', the path is the parent directory of the images.
             If type is 'video', the path is the file name of the video.
-        data[dict]: stimulus variable data
-        opt_meta[dict]: some other optional meta data
+        data : dict
+            Stimulus variable data
+        opt_meta : dict
+            Some other optional meta data
         """
         with open(self.fname, 'w') as wf:
             # write the type and path
@@ -116,13 +130,15 @@ class StimulusFile:
 
 
 class ActivationFile:
-    """a class to read and write activation file """
-
+    """
+    a class to read and write activation file
+    """
     def __init__(self, fname):
         """
-        Parameter:
-        ---------
-        fname[str]: file name with suffix as .act.h5
+        Parameters
+        ----------
+        fname : str
+            File name with suffix as .act.h5
         """
         assert fname.endswith('.act.h5'), "the file's suffix must be .act.h5"
         self.fname = fname
@@ -131,13 +147,15 @@ class ActivationFile:
         """
         Read DNN activation
 
-        Parameter:
-        ---------
-        dmask[dict]: Dictionary of the DNN mask information
+        Parameters
+        ----------
+        dmask : dict
+            Dictionary of the DNN mask information
 
-        Return:
-        ------
-        activation[dict]: DNN activation
+        Returns
+        -------
+        activation : dict
+            DNN activation
         """
         # prepare
         rf = h5py.File(self.fname, 'r')
@@ -171,9 +189,10 @@ class ActivationFile:
         """
         Write DNN activation to a hdf5 file
 
-        Parameter:
-        ---------
-        activation[dict]: DNN activation
+        Parameters
+        ----------
+        activation : dict
+            DNN activation
         """
         wf = h5py.File(self.fname, 'w')
         for layer, data in activation.items():
@@ -183,13 +202,15 @@ class ActivationFile:
 
 
 class MaskFile:
-    """a class to read and write dnn mask file"""
-
+    """
+    a class to read and write dnn mask file
+    """
     def __init__(self, fname):
         """
-        Parameter:
-        ---------
-        fname[str]: pre-designed .dmask.csv file
+        Parameters
+        ----------
+        fname : str
+            Pre-designed .dmask.csv file
         """
         assert fname.endswith('.dmask.csv'), 'File suffix must be .dmask.csv'
         self.fname = fname
@@ -198,9 +219,10 @@ class MaskFile:
         """ 
         Read DNN mask
     
-        Return:
-        ------
-        dmask[OrderedDict]: Dictionary of the DNN mask information
+        Returns
+        -------
+        dmask : OrderedDict
+            Dictionary of the DNN mask information
         """
         # -load csv data-
         with open(self.fname) as rf:
@@ -232,9 +254,10 @@ class MaskFile:
         """
         Generate .dmask.csv
 
-        Parameters:
+        Parameters
         ----------
-        dmask[dict]: Dictionary of the DNN mask information
+        dmask : dict
+            Dictionary of the DNN mask information
         """
         with open(self.fname, 'w') as wf:
             for layer, axes_dict in dmask.items():
@@ -256,13 +279,15 @@ class MaskFile:
 
 
 class RoiFile:
-    """a class to read and write roi file """
-
+    """
+    a class to read and write roi file 
+    """
     def __init__(self, fname):
         """
-        Parameter:
-        ---------
-        fname[str]: pre-designed .roi.h5 file
+        Parameters
+        ----------
+        fname : str
+            Pre-designed .roi.h5 file
         """
         assert fname.endswith('.roi.h5'), "the file's suffix must be .roi.h5"
         self.fname = fname
@@ -271,14 +296,17 @@ class RoiFile:
         """
         Read data of ROIs of the brain.
 
-        Parameter:
-        ---------
-        rois[str|list]: ROI names of interest
+        Parameters
+        ----------
+        rois : str, list
+            ROI names of interest
 
-        Return:
-        ------
-        rois[list]: ROI names which are corresponding to columns in data
-        data[ndarray]: ROI data
+        Returns
+        -------
+        rois : list
+            ROI names which are corresponding to columns in data
+        data : array
+            ROI data
         """
         rf = h5py.File(self.fname, 'r')
         if rois is None:
@@ -298,10 +326,12 @@ class RoiFile:
         """
         Write data of ROIs of the brain.
 
-        Parameters:
-        ---------
-        rois[str|list]: ROI names which are corresponding to columns in data
-        data[ndarray]: ROI data
+        Parameters
+        ----------
+        rois : str, list
+            ROI names which are corresponding to columns in data
+        data : array
+            ROI data
         """
         # preprocessing
         if isinstance(rois, str):
@@ -322,40 +352,100 @@ class RoiFile:
         wf.close()
 
 
-class ImageFile():
-    """a class to read and write image file """
-    def __init__(self, file_path):        
-        assert file_path.endswith('.png'), "the file's suffix must be .png"
-        self.path = file_path
-        
-    def set(self, file_path):
-        self.path = file_path;
-        
+class RdmFile:
+    """
+    A class to read/write representation distance matrices (RDMs) from/to .rdm.h5 file.
+    For saving time and space, DNNBrain only hold on the upper triangle of each RDM.
+    We can use np.tri(n_item, k=-1, dtype=np.bool).T to get the index array of the upper triangle.
+    The index array can help us to restore RDM from the upper triangle whose shape is ((n_item^2-n_item)/2,).
+    """
+
+    def __init__(self, fname):
+        """
+        Parameters
+        ----------
+        fname : str
+            File name with suffix as .rdm.h5
+        """
+        assert fname.endswith('.rdm.h5'), "the file's suffix must be .rdm.h5"
+        self.fname = fname
+
     def read(self):
-        return h5py.File(self.path, 'r')
-        
-    def write(self, image):
         """
-        Write an image object to disk file
-        image: a image object
+        Read RDMs from .rdm.h5 file
+
+        Returns
+        -------
+        rdm_type : str
+            Choices=(bRDM, dRDM)
+            bRDM: RDM for brain activation
+            dRDM: RDM for DNN activation
+        rdm_dict : dict
+            A dict containing the RDM information
+                
+            +-----------+-------------------------+-----------------------------------------------------+
+            |  RDM type |        Keys             |                Values                               |
+            +===========+=========================+=====================================================+
+            |    bRDM   |  Labels of brain ROIs   |  Arrays with shape as ((n_item^2-n_item)/2,)        |                                 
+            +-----------+-------------------------+-----------------------------------------------------+
+            |    dRDM   |  Layer names            |  Arrays with shape as (n_iter, (n_item^2-n_item)/2) |
+            +-----------+-------------------------+-----------------------------------------------------+
         """
-        h5py.File(self.path, image, 'w')
-    
-class VideoFile():
-    """a class to read and write video file """
-    def __init__(self, file_path):        
-        assert file_path.endswith('.mp4'), "the file's suffix must be .mp4"
-        self.path = file_path
-        
-    def set(self, file_path):
-        self.path = file_path;
-        
-    def read(self):
-        return h5py.File(self.path, 'r')
-        
-    def write(self, video):
+        rf = h5py.File(self.fname, 'r')
+
+        # check
+        rdm_type = rf.attrs['type']
+        if rdm_type == 'bRDM':
+            for v in rf.values():
+                assert v.ndim == 1, "bRDM's shape must be ((n_item^2-n_item)/2,)"
+        elif rdm_type == 'dRDM':
+            for v in rf.values():
+                assert v.ndim == 2, "dRDM's shape must be (n_iter, (n_item^2-n_item)/2)"
+        else:
+            raise TypeError("RDM type must be one of (bRDM, dRDM)")
+
+        # get data
+        rdm_dict = dict()
+        for k, v in rf.items():
+            rdm_dict[k] = v[:]
+
+        rf.close()
+        return rdm_type, rdm_dict
+
+    def write(self, rdm_type, rdm_dict):
         """
-        Write an video object to the disk
-        video: a video object
+        write RDMs to .rdm.h5 file
+
+        Parameters
+        ----------
+        rdm_type : str
+            Choices=(bRDM, dRDM)
+            bRDM: RDM for brain activation
+            dRDM: RDM for DNN activation
+        rdm_dict : dict
+            A dict containing the RDM information
+                
+            +-----------+-------------------------+-----------------------------------------------------+
+            |  RDM type |        Keys             |                Values                               |
+            +===========+=========================+=====================================================+
+            |    bRDM   |  Labels of brain ROIs   |  Arrays with shape as ((n_item^2-n_item)/2,)        |                                 
+            +-----------+-------------------------+-----------------------------------------------------+
+            |    dRDM   |  Layer names            |  Arrays with shape as (n_iter, (n_item^2-n_item)/2) |
+            +-----------+-------------------------+-----------------------------------------------------+
         """
-        h5py.File(self.path, video, 'w')
+        # check
+        if rdm_type == 'bRDM':
+            for v in rdm_dict.values():
+                assert v.ndim == 1, "bRDM's shape must be ((n_item^2-n_item)/2,)"
+        elif rdm_type == 'dRDM':
+            for v in rdm_dict.values():
+                assert v.ndim == 2, "dRDM's shape must be (n_iter, (n_item^2-n_item)/2)"
+        else:
+            raise TypeError("RDM type must be one of (bRDM, dRDM)")
+
+        # write
+        wf = h5py.File(self.fname, 'w')
+        wf.attrs['type'] = rdm_type
+        for k, v in rdm_dict.items():
+            wf.create_dataset(k, data=v, compression='gzip')
+        wf.close()
